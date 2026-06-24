@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus · About</title>
+  <link rel="icon" type="image/png" href="assets/title-icon.png">
+  <link rel="stylesheet" href="nexus.css">
+  <style>
+    /* intro-only: make sure the sticky header does not cover hash targets */
+    html {
+      scroll-padding-top: 90px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- header -->
+  <header class="header">
+    <div class="header-left">
+      <a href="index.html" class="header-logo" id="headerLogo">
+        <span>Nexus</span>
+      </a>
+    </div>
+    <nav class="header-nav">
+      <a href="intro.html#about-us" id="navAbout">About Us</a>
+      <a href="intro.html#our-mission" id="navMission">Our Mission</a>
+      <a href="submit.html">Submit</a>
+      <a href="drive.html">Upload</a>
+      <a href="engine.html">Search</a>
+    </nav>
+    <div class="header-account" id="headerAccount"></div>
+  </header>
+
+  <!-- hero -->
+  <section class="page-hero" id="about-us">
+    <div class="page-hero-text">
+      <span class="hero-kicker">About Us</span>
+      <h1>A passion project by students, for students</h1>
+      <p>Nexus is a curated link-sharing space where the crew collects, discovers, and votes on the resources that actually matter.</p>
+      <a href="engine.html" class="btn">Explore links</a>
+    </div>
+    <div class="page-hero-media">
+      <img src="assets/hero-placeholder.jpg" alt="Students collaborating on a project">
+    </div>
+  </section>
+
+  <!-- cards section -->
+  <section class="page-section page-section-alt" id="our-mission">
+    <div class="section-inner">
+      <div class="section-header">
+        <h2>Our mission</h2>
+        <p>We believe the best resources come from people you trust. Nexus makes it easy to share what you find and surface what the community values most.</p>
+      </div>
+      <div class="cards">
+        <article class="card card-hover">
+          <div class="card-media">
+            <img src="assets/card-1-placeholder.jpg" alt="Resource discovery">
+          </div>
+          <div class="card-body">
+            <h3>Discover</h3>
+            <p>Search and browse links that have been hand-picked and voted on by the crew.</p>
+          </div>
+        </article>
+        <article class="card card-hover">
+          <div class="card-media">
+            <img src="assets/card-2-placeholder.jpg" alt="Community voting">
+          </div>
+          <div class="card-body">
+            <h3>Vote</h3>
+            <p>Upvote the resources that helped you and downvote the ones that missed the mark.</p>
+          </div>
+        </article>
+        <article class="card card-hover">
+          <div class="card-media">
+            <img src="assets/card-3-placeholder.jpg" alt="Submit a resource">
+          </div>
+          <div class="card-body">
+            <h3>Share</h3>
+            <p>Submit links with keywords so others can find them quickly and easily.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- feature rows -->
+  <section class="page-section">
+    <div class="section-inner">
+      <div class="feature-row">
+        <div class="feature-media">
+          <img src="assets/feature-1-placeholder.jpg" alt="Submit your resources">
+        </div>
+        <div class="feature-text">
+          <h3>Submit your resources</h3>
+          <p>Found a tutorial, tool, or article worth sharing? Add it to Nexus with a title, URL, and a few keywords so the rest of the crew can find it.</p>
+          <a href="submit.html" class="text-link">Submit a link</a>
+        </div>
+      </div>
+      <div class="feature-row reverse">
+        <div class="feature-media">
+          <img src="assets/feature-2-placeholder.jpg" alt="Search for resources">
+        </div>
+        <div class="feature-text">
+          <h3>Search for resources</h3>
+          <p>Use relevance-ranked search to find the highest-voted links by title, keyword, or popularity.</p>
+          <a href="engine.html" class="text-link">Start searching</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-links">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Contact</a>
+      </div>
+      <p class="footer-copy">© 2026 Nexus. All views are the crew's own.</p>
+    </div>
+  </footer>
+
+  <script>
+    (function() {
+      let currentUser = null;
+
+      function getSavedUser() {
+        const saved = localStorage.getItem('google_user');
+        return saved ? JSON.parse(saved) : null;
+      }
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+          if (m === '&') return '&amp;';
+          if (m === '<') return '&lt;';
+          if (m === '>') return '&gt;';
+          return m;
+        });
+      }
+
+      function updateAccountDisplay() {
+        const accountDiv = document.getElementById('headerAccount');
+        if (!accountDiv) return;
+
+        currentUser = getSavedUser();
+        if (currentUser) {
+          accountDiv.innerHTML = `
+            <div class="user-info">
+              <img src="${currentUser.picture}" class="user-avatar" alt="Avatar">
+              <span class="user-name">${escapeHtml(currentUser.name)}</span>
+              <button id="signOutBtn" class="sign-out-btn">Sign Out</button>
+            </div>
+          `;
+          document.getElementById('signOutBtn').addEventListener('click', signOut);
+        } else {
+          accountDiv.innerHTML = `<a href="login.html?redirect=${encodeURIComponent(window.location.pathname.split('/').pop() + window.location.search)}" class="sign-in-btn">Sign In</a>`;
+        }
+      }
+
+      function signOut() {
+        currentUser = null;
+        localStorage.removeItem('google_user');
+        if (window.google && window.google.accounts) {
+          google.accounts.id.disableAutoSelect();
+        }
+        updateAccountDisplay();
+      }
+
+      function setActiveNavFromHash() {
+        const aboutLink = document.getElementById('navAbout');
+        const missionLink = document.getElementById('navMission');
+        if (!aboutLink || !missionLink) return;
+        aboutLink.classList.remove('nav-active');
+        missionLink.classList.remove('nav-active');
+        if (window.location.hash === '#our-mission') {
+          missionLink.classList.add('nav-active');
+        } else {
+          aboutLink.classList.add('nav-active');
+        }
+      }
+
+      updateAccountDisplay();
+      setActiveNavFromHash();
+      window.addEventListener('hashchange', setActiveNavFromHash);
+    })();
+  </script>
+
+  <!-- load logo + font from nexus-config.json -->
+  <script>
+    (function() {
+      const CONFIG_URL = 'nexus-config.json?v=' + Date.now();
+
+      fetch(CONFIG_URL)
+        .then(r => {
+          if (!r.ok) throw new Error('Could not load ' + CONFIG_URL);
+          return r.json();
+        })
+        .then(cfg => {
+          if (cfg.font) {
+            if (cfg.font.url) {
+              const link = document.createElement('link');
+              link.rel = 'stylesheet';
+              link.href = cfg.font.url;
+              document.head.appendChild(link);
+            }
+            if (cfg.font.family) {
+              document.documentElement.style.setProperty('--app-font', cfg.font.family);
+            }
+          }
+
+          if (cfg.logo && cfg.logo.image) {
+            const logoContainer = document.getElementById('headerLogo');
+            if (logoContainer) {
+              logoContainer.innerHTML = '';
+              const img = document.createElement('img');
+              img.src = cfg.logo.image;
+              img.alt = cfg.logo.alt || 'Nexus';
+              img.style.maxHeight = '32px';
+              logoContainer.appendChild(img);
+            }
+          }
+        })
+        .catch(err => {
+          console.warn('Nexus config not applied:', err.message);
+        });
+    })();
+  </script>
+
+</body>
+</html>

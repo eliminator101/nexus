@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus · Welcome</title>
+  <link rel="icon" type="image/png" href="assets/title-icon.png">
+  <link rel="stylesheet" href="nexus.css">
+</head>
+<body>
+
+  <!-- header -->
+  <header class="header">
+    <div class="header-left">
+      <a href="index.html" class="header-logo" id="headerLogo">
+        <span>Nexus</span>
+      </a>
+    </div>
+    <nav class="header-nav">
+      <a href="intro.html#about-us">About Us</a>
+      <a href="intro.html#our-mission">Our Mission</a>
+      <a href="submit.html">Submit</a>
+      <a href="drive.html">Upload</a>
+      <a href="engine.html">Search</a>
+    </nav>
+    <div class="header-account" id="headerAccount">
+      <a href="login.html" class="sign-in-btn">Sign In</a>
+    </div>
+  </header>
+
+  <!-- main hero -->
+  <main class="landing-hero">
+    <a href="index.html" class="landing-logo" id="logoContainer" style="text-decoration: none;">
+      <span>N</span><span>e</span><span>x</span><span>u</span><span>s</span>
+    </a>
+
+    <p class="landing-tagline">Find the best resources shared by the crew.</br> Search links, vote for them, and submit your own.</p>
+
+    <div class="search-box" style="max-width: 540px;">
+      <span class="search-icon" id="searchIconContainer">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </span>
+      <input class="search-input" id="searchInput" type="text" placeholder="Search by title or keywords" aria-label="Search" maxlength="1000">
+    </div>
+
+    <p class="landing-hint">Press Enter to search</p>
+  </main>
+
+  <!-- footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-links">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Contact</a>
+      </div>
+      <p class="footer-copy">© 2026 Nexus. All views are the crew's own.</p>
+    </div>
+  </footer>
+
+  <script>
+    (function() {
+      // ---- search bar: submit query to engine.html ----
+      const searchInput = document.getElementById('searchInput');
+      const searchIcon = document.getElementById('searchIconContainer');
+
+      function goToSearch() {
+        const query = searchInput ? searchInput.value.trim() : '';
+        if (query) {
+          window.location.href = 'engine.html?q=' + encodeURIComponent(query);
+        }
+      }
+
+      if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') goToSearch();
+        });
+      }
+
+      if (searchIcon) {
+        searchIcon.style.cursor = 'pointer';
+        searchIcon.addEventListener('click', goToSearch);
+      }
+    })();
+  </script>
+
+  <script>
+    (function() {
+      // Load nexus-config.json and apply logo/search-icon/font overrides
+      // ?v= timestamp prevents the browser from using a cached config after edits.
+      const CONFIG_URL = 'nexus-config.json?v=' + Date.now();
+
+      fetch(CONFIG_URL)
+        .then(r => {
+          if (!r.ok) throw new Error('Could not load ' + CONFIG_URL);
+          return r.json();
+        })
+        .then(cfg => {
+          // ---- font ----
+          if (cfg.font) {
+            if (cfg.font.url) {
+              const link = document.createElement('link');
+              link.rel = 'stylesheet';
+              link.href = cfg.font.url;
+              document.head.appendChild(link);
+            }
+            if (cfg.font.family) {
+              document.documentElement.style.setProperty('--app-font', cfg.font.family);
+            }
+          }
+
+          // ---- logo image ----
+          if (cfg.logo && cfg.logo.image) {
+            const logoContainer = document.getElementById('logoContainer');
+            const headerLogo = document.getElementById('headerLogo');
+            if (logoContainer) {
+              logoContainer.innerHTML = '';
+              const img = document.createElement('img');
+              img.src = cfg.logo.image;
+              img.alt = cfg.logo.alt || 'Logo';
+              img.style.maxWidth = '320px';
+              img.style.maxHeight = '120px';
+              logoContainer.appendChild(img);
+            }
+            if (headerLogo) {
+              headerLogo.innerHTML = '';
+              const img = document.createElement('img');
+              img.src = cfg.logo.image;
+              img.alt = cfg.logo.alt || 'Nexus';
+              headerLogo.appendChild(img);
+            }
+          }
+
+          // ---- search icon image ----
+          if (cfg.searchIcon && cfg.searchIcon.image) {
+            const searchContainer = document.getElementById('searchIconContainer');
+            if (searchContainer) {
+              searchContainer.textContent = '';
+              const img = document.createElement('img');
+              img.src = cfg.searchIcon.image;
+              img.alt = cfg.searchIcon.alt || 'Search';
+              searchContainer.appendChild(img);
+            }
+          }
+        })
+        .catch(err => {
+          // Config is optional; silently fall back to defaults
+          console.warn('Nexus config not applied:', err.message);
+        });
+    })();
+  </script>
+</body>
+</html>

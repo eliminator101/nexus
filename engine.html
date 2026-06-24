@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus · Search</title>
+  <link rel="icon" type="image/png" href="assets/title-icon.png">
+  <link rel="stylesheet" href="nexus.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+  <!-- header -->
+  <header class="header">
+    <div class="header-left">
+      <a href="index.html" class="header-logo" id="headerLogo">
+        <span>Nexus</span>
+      </a>
+    </div>
+    <nav class="header-nav">
+      <a href="intro.html#about-us">About Us</a>
+      <a href="intro.html#our-mission">Our Mission</a>
+      <a href="submit.html">Submit</a>
+      <a href="drive.html">Upload</a>
+      <a href="engine.html" class="nav-active">Search</a>
+    </nav>
+    <div class="header-account" id="headerAccount"></div>
+  </header>
+
+  <main class="main">
+
+    <!-- login screen -->
+    <div id="loginScreen" class="login-screen">
+      <div class="card login-card">
+        <img src="assets/nexus-logo.png" alt="Nexus" class="brand-logo" id="loginLogo" onerror="this.style.display='none'">
+        <h1>Nexus Link Manager</h1>
+        <p class="subtitle">Sign in with Google or continue as a guest to search and vote on links from the crew.</p>
+        <div class="google-btn-container" id="googleSignInBtn"></div>
+        <div class="login-divider">or</div>
+        <input type="password" id="guestPasswordInput" class="guest-password" placeholder="Guest password">
+        <button id="guestLoginBtn" class="btn btn-outline">Continue as Guest</button>
+        <p id="guestPasswordError" class="guest-password-error"></p>
+        <p class="login-note">All data is saved in the cloud and shared with everyone.</p>
+      </div>
+    </div>
+
+    <!-- main app content -->
+    <div id="appContent" class="app-content">
+      <div class="container">
+
+        <div id="alert" class="alert"></div>
+
+        <!-- search + results section -->
+        <section class="card">
+          <h2>Search Links</h2>
+
+          <div class="search-section">
+            <input type="text" id="searchInput" placeholder="Search by title or keywords..." maxlength="1000">
+            <button id="searchBtn" class="btn">Search</button>
+            <button id="resetBtn" class="btn btn-secondary">Reset</button>
+          </div>
+
+          <div id="results">
+            <p class="result-count"><span id="resultCount"></span></p>
+            <div id="linksList" class="links-list">
+              <div class="loading">Loading links from database...</div>
+            </div>
+            <div id="loadMoreContainer"></div>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-links">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Contact</a>
+      </div>
+      <p class="footer-copy">© 2026 Nexus. All views are the crew's own.</p>
+    </div>
+  </footer>
+
+  <script src="engine.js"></script>
+
+</body>
+</html>

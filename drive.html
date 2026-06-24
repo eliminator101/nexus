@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus · Drive Upload</title>
+  <link rel="icon" type="image/png" href="assets/title-icon.png">
+  <link rel="stylesheet" href="nexus.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    /* drive-only: keyword toggles stay below the label */
+    .keyword-toggles {
+      margin-top: var(--space-2);
+    }
+
+    /* drive-only: file picker dropzone, themed with Nexus tokens */
+    .file-input-wrapper {
+      position: relative;
+      overflow: hidden;
+      display: block;
+      width: 100%;
+    }
+
+    .file-input-wrapper input[type="file"] {
+      position: absolute;
+      left: -9999px;
+    }
+
+    .file-label {
+      display: block;
+      padding: var(--space-4);
+      border: 2px dashed var(--border, #d0d5dd);
+      border-radius: var(--radius, 8px);
+      text-align: center;
+      color: var(--text-muted, #5f6368);
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .file-label:hover {
+      border-color: var(--accent, #4f46e5);
+      color: var(--accent, #4f46e5);
+    }
+
+    .file-name {
+      margin-top: var(--space-2);
+      font-size: 0.85rem;
+      color: var(--text, #202124);
+      word-break: break-all;
+    }
+
+    /* drive-only: spinner for the upload button */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- header -->
+  <header class="header">
+    <div class="header-left">
+      <a href="index.html" class="header-logo" id="headerLogo">
+        <span>Nexus</span>
+      </a>
+    </div>
+    <nav class="header-nav">
+      <a href="intro.html#about-us">About Us</a>
+      <a href="intro.html#our-mission">Our Mission</a>
+      <a href="submit.html">Submit</a>
+      <a href="drive.html" class="nav-active">Upload</a>
+      <a href="engine.html">Search</a>
+    </nav>
+    <div class="header-account" id="headerAccount"></div>
+  </header>
+
+  <main class="main">
+
+    <!-- login screen -->
+    <div id="loginScreen" class="login-screen">
+      <div class="card login-card">
+        <img src="assets/nexus-logo.png" alt="Nexus" class="brand-logo" id="loginLogo" onerror="this.style.display='none'">
+        <h1>Upload to Nexus</h1>
+        <p class="subtitle">Sign in with Google to upload a file to your Drive and share it with the crew. Google Drive access is required, so guest sign-in isn't available on this page.</p>
+        <button id="googleSignInBtn" class="btn">Sign in with Google</button>
+        <p id="loginError" class="guest-password-error"></p>
+        <p class="login-note">Your file is uploaded to your own Google Drive and made public; only the link is saved to Nexus.</p>
+      </div>
+    </div>
+
+    <!-- main app content -->
+    <div id="appContent" class="app-content">
+      <div class="container container-md">
+
+        <!-- drive upload section -->
+        <section class="card" id="upload-section">
+          <h2>Upload a File</h2>
+          <p class="subtitle">Upload a file to your Google Drive, make it public, and share the link with the crew automatically.</p>
+
+          <div class="form-group">
+            <label for="linkTitle">Title *<span class="char-count" id="titleCount">0 / 500</span></label>
+            <input type="text" id="linkTitle" maxlength="500" placeholder="A descriptive title (auto-filled from the file name)">
+          </div>
+
+          <div class="form-group">
+            <label>Keywords *<span class="hint-text">click to select at least one</span></label>
+            <div class="keyword-toggles" id="keywordToggles">
+              <div class="loading">Loading keywords...</div>
+            </div>
+            <input type="hidden" id="linkKeywords">
+          </div>
+
+          <div class="form-group">
+            <label>File *</label>
+            <div class="file-input-wrapper">
+              <label for="fileInput" class="file-label">Click to choose a file</label>
+              <input type="file" id="fileInput">
+            </div>
+            <div class="file-name" id="fileName"></div>
+          </div>
+
+          <button id="uploadBtn" class="btn" disabled>Upload &amp; Submit</button>
+          <div id="alert" class="alert"></div>
+        </section>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-links">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Contact</a>
+      </div>
+      <p class="footer-copy">© 2026 Nexus. All views are the crew's own.</p>
+    </div>
+  </footer>
+
+  <script>
+    // ============================================
+    // Single Google client for BOTH identity and Drive access.
+    // Uses the Google Identity Services OAuth2 *token* flow
+    // (google.accounts.oauth2) — the same API as reference.html —
+    // requesting identity + drive.file scopes in one consent.
+    // ============================================
+    const CLIENT_ID = '681583969653-a5jt1ai9ddnflmoun8edtul69gg9qbsl.apps.googleusercontent.com';
+    const SCOPES = [
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+      'https://www.googleapis.com/auth/drive.file'
+    ].join(' ');
+
+    // Supabase Configuration
+    const SUPABASE_URL = 'https://urnbbsbnfrffqmoyvivw.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVybmJic2JuZnJmZnFtb3l2aXZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1ODI0NTYsImV4cCI6MjA5NDE1ODQ1Nn0.srfinvvX2ILO9_sVwP2TjZQucQYQ1tLJPZyGbOc2y4g';
+
+    let currentUser = null;
+    let selectedKeywords = [];
+
+    // Drive / auth state
+    let accessToken = null;
+    let selectedFile = null;
+    let tokenClient = null;
+
+    // Helper function to make Supabase requests
+    async function supabaseRequest(endpoint, options = {}) {
+      const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+      const headers = {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+        ...options.headers
+      };
+
+      const response = await fetch(url, { ...options, headers });
+
+      if (!response.ok) {
+        throw new Error(`Database error: ${response.status}`);
+      }
+
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return { success: true };
+      }
+
+      try {
+        return await response.json();
+      } catch (e) {
+        return { success: true };
+      }
+    }
+
+    // Save a single link to database
+    async function insertLink(link) {
+      try {
+        await supabaseRequest('links', {
+          method: 'POST',
+          body: JSON.stringify(link)
+        });
+        return true;
+      } catch (error) {
+        console.error('Failed to insert link:', error);
+        return false;
+      }
+    }
+
+    // ---- keyword toggles ----
+    async function loadKeywords() {
+      const container = document.getElementById('keywordToggles');
+      if (!container) return;
+
+      try {
+        const response = await fetch('keywords.json');
+        if (!response.ok) throw new Error('Could not load keywords');
+        const data = await response.json();
+        const keywords = Array.isArray(data.keywords) ? data.keywords : [];
+        window.availableKeywords = keywords;
+        renderKeywordToggles();
+      } catch (error) {
+        console.error('Failed to load keywords:', error);
+        if (container) {
+          container.innerHTML = '<span class="hint-text">Failed to load keywords. Please check keywords.json.</span>';
+        }
+      }
+    }
+
+    function renderKeywordToggles() {
+      const container = document.getElementById('keywordToggles');
+      if (!container || !window.availableKeywords) return;
+
+      container.innerHTML = window.availableKeywords.map(kw => {
+        const isActive = selectedKeywords.includes(kw);
+        return `<button type="button" class="keyword-toggle ${isActive ? 'active' : ''}" data-keyword="${escapeHtml(kw)}">${escapeHtml(kw)}</button>`;
+      }).join('');
+    }
+
+    function toggleKeyword(keyword) {
+      const index = selectedKeywords.indexOf(keyword);
+      if (index === -1) {
+        selectedKeywords.push(keyword);
+      } else {
+        selectedKeywords.splice(index, 1);
+      }
+      renderKeywordToggles();
+    }
+
+    function updateCharCounts() {
+      const titleInput = document.getElementById('linkTitle');
+      const titleCount = document.getElementById('titleCount');
+
+      if (titleInput && titleCount) {
+        titleCount.textContent = `${titleInput.value.length} / 500`;
+      }
+    }
+
+    // ---- file selection ----
+    function onFileSelected(event) {
+      selectedFile = event.target.files[0] || null;
+
+      const fileNameEl = document.getElementById('fileName');
+      if (selectedFile) {
+        fileNameEl.textContent = selectedFile.name;
+        // auto-fill the title from the file name when empty
+        const titleInput = document.getElementById('linkTitle');
+        if (titleInput && !titleInput.value.trim()) {
+          titleInput.value = selectedFile.name.slice(0, 500);
+          updateCharCounts();
+        }
+      } else {
+        fileNameEl.textContent = '';
+      }
+
+      updateUploadButton();
+    }
+
+    function updateUploadButton() {
+      const canUpload = currentUser && accessToken && selectedFile;
+      const uploadBtn = document.getElementById('uploadBtn');
+      if (uploadBtn) {
+        uploadBtn.disabled = !canUpload;
+      }
+    }
+
+    // ---- Google auth (OAuth2 token flow: identity + Drive in one) ----
+    function initTokenClient() {
+      if (!window.google || !google.accounts || !google.accounts.oauth2) {
+        setTimeout(initTokenClient, 100);
+        return;
+      }
+
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: async (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            accessToken = tokenResponse.access_token;
+            try {
+              const info = await fetchUserInfo(accessToken);
+              currentUser = {
+                id: info.sub,
+                email: info.email,
+                name: info.name || info.email,
+                picture: info.picture
+              };
+              localStorage.setItem('google_user', JSON.stringify(currentUser));
+              showApp();
+              updateUserInfoDisplay();
+              updateUploadButton();
+              showAlert('Signed in with Google.', 'success');
+            } catch (e) {
+              console.error(e);
+              setLoginError('Signed in, but could not read your Google profile: ' + e.message);
+            }
+          } else {
+            setLoginError('Sign-in failed. Please try again.');
+          }
+        },
+        error_callback: (err) => {
+          console.error(err);
+          setLoginError('Sign-in error: ' + (err && err.message ? err.message : 'Unknown error'));
+        }
+      });
+    }
+
+    function requestAccessToken() {
+      setLoginError('');
+      if (!tokenClient) {
+        setLoginError('Google sign-in is still loading. Wait a moment and try again.');
+        return;
+      }
+      // 'consent' guarantees the Drive scope grant; Google remembers it afterwards.
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    async function fetchUserInfo(token) {
+      const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!r.ok) {
+        throw new Error(`profile lookup failed (${r.status})`);
+      }
+      return r.json();
+    }
+
+    function setLoginError(message) {
+      const el = document.getElementById('loginError');
+      if (el) el.textContent = message;
+    }
+
+    // ---- Drive upload ----
+    async function uploadFileToDrive(file, token) {
+      const metadata = {
+        name: file.name,
+        mimeType: file.type || 'application/octet-stream',
+      };
+
+      const formData = new FormData();
+      formData.append(
+        'metadata',
+        new Blob([JSON.stringify(metadata)], { type: 'application/json' })
+      );
+      formData.append('file', file);
+
+      const response = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.error?.message || `Upload failed (${response.status})`);
+      }
+
+      const data = await response.json();
+      return data.id;
+    }
+
+    async function makeFilePublic(fileId, token) {
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            role: 'reader',
+            type: 'anyone',
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.error?.message || `Permission change failed (${response.status})`);
+      }
+    }
+
+    function setUploading(isUploading) {
+      const btn = document.getElementById('uploadBtn');
+      if (!btn) return;
+      if (isUploading) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span>Uploading...';
+      } else {
+        btn.innerHTML = 'Upload &amp; Submit';
+        updateUploadButton();
+      }
+    }
+
+    async function uploadAndSubmit() {
+      if (!currentUser || !accessToken) {
+        showAlert('Please sign in with Google first', 'error');
+        return;
+      }
+
+      const titleInput = document.getElementById('linkTitle');
+      const title = titleInput ? titleInput.value : '';
+
+      if (!title || !title.trim()) {
+        showAlert('Please enter a title', 'error');
+        return;
+      }
+
+      if (title.trim().length > 500) {
+        showAlert('Title must be 500 characters or less', 'error');
+        return;
+      }
+
+      if (selectedKeywords.length === 0) {
+        showAlert('Please select at least one keyword', 'error');
+        return;
+      }
+
+      if (!selectedFile) {
+        showAlert('Please choose a file to upload', 'error');
+        return;
+      }
+
+      setUploading(true);
+      showAlert('Uploading to Google Drive...', 'info');
+
+      try {
+        // 1. Upload the file to the user's Drive
+        const fileId = await uploadFileToDrive(selectedFile, accessToken);
+
+        // 2. Make it public (anyone with the link can view)
+        await makeFilePublic(fileId, accessToken);
+
+        // 3. Build the public Drive link
+        const url = `https://drive.google.com/file/d/${fileId}/view`;
+
+        // 4. Save the link to the database (same record shape as submit.html)
+        const newLink = {
+          id: Date.now().toString(),
+          title: title.trim(),
+          url: url,
+          keywords: [...selectedKeywords],
+          timestamp: Date.now(),
+          upvotes: [],
+          downvotes: [],
+          submitterName: currentUser.name,
+          submitterEmail: currentUser.email
+        };
+
+        const insertSuccess = await insertLink(newLink);
+        if (!insertSuccess) {
+          throw new Error('Failed to save the link to the cloud');
+        }
+
+        // reset the form
+        titleInput.value = '';
+        selectedKeywords = [];
+        renderKeywordToggles();
+        updateCharCounts();
+        selectedFile = null;
+        document.getElementById('fileInput').value = '';
+        document.getElementById('fileName').textContent = '';
+
+        showAlert('File uploaded and link submitted!', 'success');
+      } catch (err) {
+        console.error(err);
+        showAlert('Error: ' + err.message, 'error');
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    function showAlert(message, type) {
+      const alertDiv = document.getElementById('alert');
+      if (alertDiv) {
+        alertDiv.textContent = message;
+        alertDiv.className = `alert ${type}`;
+        setTimeout(() => {
+          alertDiv.className = 'alert';
+        }, 3000);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+      });
+    }
+
+    // ---- view + header ----
+    function showApp() {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appContent').classList.add('visible');
+    }
+
+    function showLogin() {
+      document.getElementById('loginScreen').style.display = '';
+      document.getElementById('appContent').classList.remove('visible');
+    }
+
+    function updateUserInfoDisplay() {
+      const accountDiv = document.getElementById('headerAccount');
+      if (!accountDiv) return;
+
+      if (currentUser) {
+        accountDiv.innerHTML = `
+          <div class="user-info">
+            <img src="${currentUser.picture}" class="user-avatar" alt="Avatar">
+            <span class="user-name">${escapeHtml(currentUser.name)}</span>
+            <button id="signOutBtn" class="sign-out-btn">Sign Out</button>
+          </div>
+        `;
+        document.getElementById('signOutBtn').addEventListener('click', signOut);
+      } else {
+        accountDiv.innerHTML = `<button id="headerSignInBtn" class="sign-in-btn">Sign In</button>`;
+        document.getElementById('headerSignInBtn').addEventListener('click', requestAccessToken);
+      }
+    }
+
+    function signOut() {
+      if (accessToken && window.google && google.accounts && google.accounts.oauth2) {
+        google.accounts.oauth2.revoke(accessToken, () => {});
+      }
+      accessToken = null;
+      currentUser = null;
+      localStorage.removeItem('google_user');
+      showLogin();
+      updateUserInfoDisplay();
+    }
+
+    function restoreSession() {
+      // The Drive access token is short-lived and never persisted, so a returning
+      // user still has to sign in to obtain one. We restore the saved profile only
+      // to show it in the header; the app stays gated until they get a token.
+      const savedUser = localStorage.getItem('google_user');
+      if (savedUser) {
+        try { currentUser = JSON.parse(savedUser); } catch (e) { currentUser = null; }
+      }
+      updateUserInfoDisplay();
+      showLogin();
+    }
+
+    function setupEventListeners() {
+      const googleSignInBtn = document.getElementById('googleSignInBtn');
+      if (googleSignInBtn) {
+        googleSignInBtn.addEventListener('click', requestAccessToken);
+      }
+
+      const uploadBtn = document.getElementById('uploadBtn');
+      if (uploadBtn) {
+        uploadBtn.addEventListener('click', uploadAndSubmit);
+      }
+
+      const titleInput = document.getElementById('linkTitle');
+      if (titleInput) {
+        titleInput.addEventListener('input', updateCharCounts);
+      }
+
+      const fileInput = document.getElementById('fileInput');
+      if (fileInput) {
+        fileInput.addEventListener('change', onFileSelected);
+      }
+
+      const keywordToggles = document.getElementById('keywordToggles');
+      if (keywordToggles) {
+        keywordToggles.addEventListener('click', (e) => {
+          const toggle = e.target.closest('.keyword-toggle');
+          if (toggle) {
+            toggleKeyword(toggle.getAttribute('data-keyword'));
+          }
+        });
+      }
+    }
+
+    function init() {
+      setupEventListeners();
+      loadKeywords();
+      updateCharCounts();
+      initTokenClient();
+      restoreSession();
+    }
+
+    init();
+
+    // ---- load Nexus logo + font from nexus-config.json ----
+    (function() {
+      const CONFIG_URL = 'nexus-config.json?v=' + Date.now();
+
+      fetch(CONFIG_URL)
+        .then(r => {
+          if (!r.ok) throw new Error('Could not load ' + CONFIG_URL);
+          return r.json();
+        })
+        .then(cfg => {
+          if (cfg.font) {
+            if (cfg.font.url) {
+              const link = document.createElement('link');
+              link.rel = 'stylesheet';
+              link.href = cfg.font.url;
+              document.head.appendChild(link);
+            }
+            if (cfg.font.family) {
+              document.documentElement.style.setProperty('--app-font', cfg.font.family);
+            }
+          }
+
+          if (cfg.logo && cfg.logo.image) {
+            const logoContainer = document.getElementById('headerLogo');
+            const loginLogo = document.getElementById('loginLogo');
+            if (logoContainer) {
+              logoContainer.innerHTML = '';
+              const img = document.createElement('img');
+              img.src = cfg.logo.image;
+              img.alt = cfg.logo.alt || 'Nexus';
+              img.style.maxHeight = '32px';
+              logoContainer.appendChild(img);
+            }
+            if (loginLogo) {
+              loginLogo.src = cfg.logo.image;
+              loginLogo.alt = cfg.logo.alt || 'Nexus';
+              loginLogo.style.display = '';
+            }
+          }
+        })
+        .catch(err => {
+          console.warn('Nexus config not applied:', err.message);
+        });
+    })();
+  </script>
+
+</body>
+</html>

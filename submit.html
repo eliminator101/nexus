@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus · Submit</title>
+  <link rel="icon" type="image/png" href="assets/title-icon.png">
+  <link rel="stylesheet" href="nexus.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    /* submit-only: ensure keyword toggles stay below the label */
+    .keyword-toggles {
+      margin-top: var(--space-2);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- header -->
+  <header class="header">
+    <div class="header-left">
+      <a href="index.html" class="header-logo" id="headerLogo">
+        <span>Nexus</span>
+      </a>
+    </div>
+    <nav class="header-nav">
+      <a href="intro.html#about-us">About Us</a>
+      <a href="intro.html#our-mission">Our Mission</a>
+      <a href="submit.html" class="nav-active">Submit</a>
+      <a href="drive.html">Upload</a>
+      <a href="engine.html">Search</a>
+    </nav>
+    <div class="header-account" id="headerAccount"></div>
+  </header>
+
+  <main class="main">
+
+    <!-- login screen -->
+    <div id="loginScreen" class="login-screen">
+      <div class="card login-card">
+        <img src="assets/nexus-logo.png" alt="Nexus" class="brand-logo" id="loginLogo" onerror="this.style.display='none'">
+        <h1>Nexus Link Manager</h1>
+        <p class="subtitle">Sign in with Google or continue as a guest to submit links to the crew.</p>
+        <div class="google-btn-container" id="googleSignInBtn"></div>
+        <div class="login-divider">or</div>
+        <input type="password" id="guestPasswordInput" class="guest-password" placeholder="Guest password">
+        <button id="guestLoginBtn" class="btn btn-outline">Continue as Guest</button>
+        <p id="guestPasswordError" class="guest-password-error"></p>
+        <p class="login-note">All data is saved in the cloud and shared with everyone.</p>
+      </div>
+    </div>
+
+    <!-- main app content -->
+    <div id="appContent" class="app-content">
+      <div class="container container-md">
+
+        <!-- submit section -->
+        <section class="card" id="submit-section">
+          <h2>Submit New Link</h2>
+
+          <div class="form-group">
+            <label for="linkTitle">Title *<span class="char-count" id="titleCount">0 / 500</span></label>
+            <input type="text" id="linkTitle" maxlength="500" placeholder="Enter a descriptive title for this link">
+          </div>
+
+          <div class="form-group">
+            <label for="linkUrl">URL *<span class="char-count" id="urlCount">0 / 1000</span></label>
+            <input type="text" id="linkUrl" maxlength="1000" placeholder="https://example.com/awesome-page">
+          </div>
+
+          <div class="form-group">
+            <label>Keywords *<span class="hint-text">click to select at least one</span></label>
+            <div class="keyword-toggles" id="keywordToggles">
+              <div class="loading">Loading keywords...</div>
+            </div>
+            <input type="hidden" id="linkKeywords">
+          </div>
+
+          <button id="submitBtn" class="btn">+ Add Link</button>
+          <div id="alert" class="alert"></div>
+        </section>
+
+      </div>
+    </div>
+
+  </main>
+
+  <!-- footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-links">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Contact</a>
+      </div>
+      <p class="footer-copy">© 2026 Nexus. All views are the crew's own.</p>
+    </div>
+  </footer>
+
+  <script>
+    // ============================================
+    // Google OAuth Configuration
+    // You need to replace this with your own Google Client ID
+    // Get it from: https://console.cloud.google.com/apis/credentials
+    // ============================================
+    const GOOGLE_CLIENT_ID = '64733114747-ra62220io018kmui4u3sofo4vu8r16oh.apps.googleusercontent.com';
+
+    // Supabase Configuration
+    const SUPABASE_URL = 'https://urnbbsbnfrffqmoyvivw.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVybmJic2JuZnJmZnFtb3l2aXZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1ODI0NTYsImV4cCI6MjA5NDE1ODQ1Nn0.srfinvvX2ILO9_sVwP2TjZQucQYQ1tLJPZyGbOc2y4g';
+
+    let currentUser = null;
+    let selectedKeywords = [];
+
+    // Helper function to make Supabase requests
+    async function supabaseRequest(endpoint, options = {}) {
+      const url = `${SUPABASE_URL}/rest/v1/${endpoint}`;
+      const headers = {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+        ...options.headers
+      };
+
+      const response = await fetch(url, { ...options, headers });
+
+      if (!response.ok) {
+        throw new Error(`Database error: ${response.status}`);
+      }
+
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return { success: true };
+      }
+
+      try {
+        return await response.json();
+      } catch (e) {
+        return { success: true };
+      }
+    }
+
+    // Save a single link to database
+    async function insertLink(link) {
+      try {
+        await supabaseRequest('links', {
+          method: 'POST',
+          body: JSON.stringify(link)
+        });
+        return true;
+      } catch (error) {
+        console.error('Failed to insert link:', error);
+        return false;
+      }
+    }
+
+    function showLoading(show) {
+      const submitBtn = document.getElementById('submitBtn');
+      if (submitBtn) {
+        submitBtn.disabled = show;
+      }
+    }
+
+    // ---- keyword toggles ----
+    async function loadKeywords() {
+      const container = document.getElementById('keywordToggles');
+      if (!container) return;
+
+      try {
+        const response = await fetch('keywords.json');
+        if (!response.ok) throw new Error('Could not load keywords');
+        const data = await response.json();
+        const keywords = Array.isArray(data.keywords) ? data.keywords : [];
+        window.availableKeywords = keywords;
+        renderKeywordToggles();
+      } catch (error) {
+        console.error('Failed to load keywords:', error);
+        if (container) {
+          container.innerHTML = '<span class="hint-text">Failed to load keywords. Please check keywords.json.</span>';
+        }
+      }
+    }
+
+    function renderKeywordToggles() {
+      const container = document.getElementById('keywordToggles');
+      if (!container || !window.availableKeywords) return;
+
+      container.innerHTML = window.availableKeywords.map(kw => {
+        const isActive = selectedKeywords.includes(kw);
+        return `<button type="button" class="keyword-toggle ${isActive ? 'active' : ''}" data-keyword="${escapeHtml(kw)}">${escapeHtml(kw)}</button>`;
+      }).join('');
+    }
+
+    function toggleKeyword(keyword) {
+      const index = selectedKeywords.indexOf(keyword);
+      if (index === -1) {
+        selectedKeywords.push(keyword);
+      } else {
+        selectedKeywords.splice(index, 1);
+      }
+      renderKeywordToggles();
+    }
+
+    function updateCharCounts() {
+      const titleInput = document.getElementById('linkTitle');
+      const urlInput = document.getElementById('linkUrl');
+      const titleCount = document.getElementById('titleCount');
+      const urlCount = document.getElementById('urlCount');
+
+      if (titleInput && titleCount) {
+        titleCount.textContent = `${titleInput.value.length} / 500`;
+      }
+      if (urlInput && urlCount) {
+        urlCount.textContent = `${urlInput.value.length} / 1000`;
+      }
+    }
+
+    async function addLink(title, url) {
+      if (!currentUser) {
+        showAlert('Please sign in to submit links', 'error');
+        return false;
+      }
+
+      if (!title || !title.trim()) {
+        showAlert('Please enter a title', 'error');
+        return false;
+      }
+
+      if (title.trim().length > 500) {
+        showAlert('Title must be 500 characters or less', 'error');
+        return false;
+      }
+
+      if (!url || !url.trim()) {
+        showAlert('Please enter a URL', 'error');
+        return false;
+      }
+
+      if (url.trim().length > 1000) {
+        showAlert('URL must be 1000 characters or less', 'error');
+        return false;
+      }
+
+      if (selectedKeywords.length === 0) {
+        showAlert('Please select at least one keyword', 'error');
+        return false;
+      }
+
+      let cleanUrl = url.trim();
+      if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+        cleanUrl = 'https://' + cleanUrl;
+      }
+
+      const keywords = [...selectedKeywords];
+
+      const newLink = {
+        id: Date.now().toString(),
+        title: title.trim(),
+        url: cleanUrl,
+        keywords: keywords,
+        timestamp: Date.now(),
+        upvotes: [],
+        downvotes: [],
+        submitterName: currentUser.name,
+        submitterEmail: currentUser.email
+      };
+
+      showLoading(true);
+      const insertSuccess = await insertLink(newLink);
+      showLoading(false);
+
+      if (!insertSuccess) {
+        showAlert('Failed to save to cloud', 'error');
+        return false;
+      }
+
+      document.getElementById('linkTitle').value = '';
+      document.getElementById('linkUrl').value = '';
+      selectedKeywords = [];
+      renderKeywordToggles();
+      updateCharCounts();
+
+      showAlert('Link added successfully!', 'success');
+
+      return true;
+    }
+
+    function showAlert(message, type) {
+      const alertDiv = document.getElementById('alert');
+      if (alertDiv) {
+        alertDiv.textContent = message;
+        alertDiv.className = `alert ${type}`;
+        setTimeout(() => {
+          alertDiv.className = 'alert';
+        }, 3000);
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+      });
+    }
+
+    // Google Sign-In Handlers
+    function handleGoogleSignIn(response) {
+      if (response.credential) {
+        const payload = parseJwt(response.credential);
+        if (payload) {
+          currentUser = {
+            id: payload.sub,
+            email: payload.email,
+            name: payload.name,
+            picture: payload.picture
+          };
+
+          localStorage.setItem('google_user', JSON.stringify(currentUser));
+
+          document.getElementById('loginScreen').style.display = 'none';
+          document.getElementById('appContent').classList.add('visible');
+          updateUserInfoDisplay();
+        }
+      }
+    }
+
+    function parseJwt(token) {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+      } catch (error) {
+        console.error('JWT parse error:', error);
+        return null;
+      }
+    }
+
+    function loginAsGuest() {
+      const errorEl = document.getElementById('guestPasswordError');
+      const inputEl = document.getElementById('guestPasswordInput');
+      const entered = inputEl ? inputEl.value : '';
+
+      if (errorEl) errorEl.textContent = '';
+
+      fetch('nexus-config.json')
+        .then(r => {
+          if (!r.ok) throw new Error('Could not load config');
+          return r.json();
+        })
+        .then(cfg => {
+          const required = cfg.guestPassword || '';
+          if (required && entered !== required) {
+            if (errorEl) errorEl.textContent = 'Incorrect guest password.';
+            return;
+          }
+
+          const guestId = 'guest_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+          currentUser = {
+            id: guestId,
+            email: `${guestId}@nexus.local`,
+            name: 'Guest',
+            picture: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%23dadce0%22/%3E%3Ccircle cx=%2250%22 cy=%2240%22 r=%2220%22 fill=%22%235f6368%22/%3E%3Cellipse cx=%2250%22 cy=%2288%22 rx=%2235%22 ry=%2225%22 fill=%22%235f6368%22/%3E%3C/svg%3E'
+          };
+
+          localStorage.setItem('google_user', JSON.stringify(currentUser));
+
+          document.getElementById('loginScreen').style.display = 'none';
+          document.getElementById('appContent').classList.add('visible');
+          updateUserInfoDisplay();
+        })
+        .catch(err => {
+          console.error('Guest password check failed:', err);
+          if (errorEl) errorEl.textContent = 'Unable to verify password. Please try again.';
+        });
+    }
+
+    function updateUserInfoDisplay() {
+      const accountDiv = document.getElementById('headerAccount');
+      if (!accountDiv) return;
+
+      if (currentUser) {
+        accountDiv.innerHTML = `
+          <div class="user-info">
+            <img src="${currentUser.picture}" class="user-avatar" alt="Avatar">
+            <span class="user-name">${escapeHtml(currentUser.name)}</span>
+            <button id="signOutBtn" class="sign-out-btn">Sign Out</button>
+          </div>
+        `;
+
+        document.getElementById('signOutBtn').addEventListener('click', signOut);
+      } else {
+        accountDiv.innerHTML = `<a href="login.html?redirect=${encodeURIComponent(getCurrentPage())}" class="sign-in-btn">Sign In</a>`;
+      }
+    }
+
+    function getCurrentPage() {
+      return window.location.pathname.split('/').pop() || 'index.html';
+    }
+
+    function redirectToLogin() {
+      const currentPage = getCurrentPage();
+      window.location.href = 'login.html?redirect=' + encodeURIComponent(currentPage);
+    }
+
+    function signOut() {
+      currentUser = null;
+      localStorage.removeItem('google_user');
+
+      if (window.google && window.google.accounts) {
+        google.accounts.id.disableAutoSelect();
+      }
+
+      redirectToLogin();
+    }
+
+    function initializeGoogleSignIn() {
+      if (!window.google) {
+        setTimeout(initializeGoogleSignIn, 100);
+        return;
+      }
+
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleSignIn,
+        auto_select: false,
+        cancel_on_tap_outside: false
+      });
+
+      google.accounts.id.renderButton(
+        document.getElementById('googleSignInBtn'),
+        { theme: 'outline', size: 'large', text: 'signin_with' }
+      );
+    }
+
+    function checkExistingLogin() {
+      const savedUser = localStorage.getItem('google_user');
+      if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appContent').classList.add('visible');
+        updateUserInfoDisplay();
+      } else {
+        redirectToLogin();
+      }
+    }
+
+    function setupEventListeners() {
+      const guestLoginBtn = document.getElementById('guestLoginBtn');
+      if (guestLoginBtn) {
+        guestLoginBtn.addEventListener('click', loginAsGuest);
+      }
+
+      const submitBtn = document.getElementById('submitBtn');
+      if (submitBtn) {
+        submitBtn.addEventListener('click', () => {
+          addLink(
+            document.getElementById('linkTitle').value,
+            document.getElementById('linkUrl').value
+          );
+        });
+      }
+
+      const titleInput = document.getElementById('linkTitle');
+      if (titleInput) {
+        titleInput.addEventListener('input', updateCharCounts);
+      }
+
+      const urlInput = document.getElementById('linkUrl');
+      if (urlInput) {
+        urlInput.addEventListener('input', updateCharCounts);
+      }
+
+      const keywordToggles = document.getElementById('keywordToggles');
+      if (keywordToggles) {
+        keywordToggles.addEventListener('click', (e) => {
+          const toggle = e.target.closest('.keyword-toggle');
+          if (toggle) {
+            toggleKeyword(toggle.getAttribute('data-keyword'));
+          }
+        });
+      }
+    }
+
+    function init() {
+      setupEventListeners();
+      loadKeywords();
+      updateCharCounts();
+      checkExistingLogin();
+      initializeGoogleSignIn();
+    }
+
+    init();
+
+    // ---- load Nexus logo + font from nexus-config.json ----
+    (function() {
+      const CONFIG_URL = 'nexus-config.json?v=' + Date.now();
+
+      fetch(CONFIG_URL)
+        .then(r => {
+          if (!r.ok) throw new Error('Could not load ' + CONFIG_URL);
+          return r.json();
+        })
+        .then(cfg => {
+          if (cfg.font) {
+            if (cfg.font.url) {
+              const link = document.createElement('link');
+              link.rel = 'stylesheet';
+              link.href = cfg.font.url;
+              document.head.appendChild(link);
+            }
+            if (cfg.font.family) {
+              document.documentElement.style.setProperty('--app-font', cfg.font.family);
+            }
+          }
+
+          if (cfg.logo && cfg.logo.image) {
+            const logoContainer = document.getElementById('headerLogo');
+            const loginLogo = document.getElementById('loginLogo');
+            if (logoContainer) {
+              logoContainer.innerHTML = '';
+              const img = document.createElement('img');
+              img.src = cfg.logo.image;
+              img.alt = cfg.logo.alt || 'Nexus';
+              img.style.maxHeight = '32px';
+              logoContainer.appendChild(img);
+            }
+            if (loginLogo) {
+              loginLogo.src = cfg.logo.image;
+              loginLogo.alt = cfg.logo.alt || 'Nexus';
+              loginLogo.style.display = '';
+            }
+          }
+        })
+        .catch(err => {
+          console.warn('Nexus config not applied:', err.message);
+        });
+    })();
+  </script>
+
+</body>
+</html>

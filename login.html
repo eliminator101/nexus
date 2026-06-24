@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nexus · Sign In</title>
+  <link rel="icon" type="image/png" href="assets/title-icon.png">
+  <link rel="stylesheet" href="nexus.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+  <!-- header -->
+  <header class="header">
+    <div class="header-left">
+      <a href="index.html" class="header-logo" id="headerLogo">
+        <span>Nexus</span>
+      </a>
+    </div>
+    <nav class="header-nav">
+      <a href="intro.html#about-us">About Us</a>
+      <a href="intro.html#our-mission">Our Mission</a>
+      <a href="submit.html">Submit</a>
+      <a href="drive.html">Upload</a>
+      <a href="engine.html">Search</a>
+    </nav>
+    <div class="header-account" id="headerAccount"></div>
+  </header>
+
+  <main class="main">
+    <div class="login-screen">
+      <div class="card login-card">
+        <img src="assets/nexus-logo.png" alt="Nexus" class="brand-logo" id="loginLogo" onerror="this.style.display='none'">
+        <h1>Welcome back</h1>
+        <p class="subtitle">Sign in with your Google account or continue as a guest to submit and search links.</p>
+
+        <div class="google-btn-container" id="googleSignInBtn"></div>
+
+        <div class="login-divider">or</div>
+
+        <input type="password" id="guestPasswordInput" class="guest-password" placeholder="Guest password">
+        <button id="guestLoginBtn" class="btn btn-outline">Continue as Guest</button>
+        <p id="guestPasswordError" class="guest-password-error"></p>
+
+        <p class="login-note">All data is saved in the cloud and shared with everyone.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-links">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Contact</a>
+      </div>
+      <p class="footer-copy">© 2026 Nexus. All views are the crew's own.</p>
+    </div>
+  </footer>
+
+  <script>
+    const GOOGLE_CLIENT_ID = '64733114747-ra62220io018kmui4u3sofo4vu8r16oh.apps.googleusercontent.com';
+    const params = new URLSearchParams(window.location.search);
+    const redirectUrl = params.get('redirect') || 'index.html';
+    let currentUser = null;
+
+    function handleGoogleSignIn(response) {
+      if (response.credential) {
+        const payload = parseJwt(response.credential);
+        if (payload) {
+          currentUser = {
+            id: payload.sub,
+            email: payload.email,
+            name: payload.name,
+            picture: payload.picture
+          };
+          localStorage.setItem('google_user', JSON.stringify(currentUser));
+          window.location.href = redirectUrl;
+        }
+      }
+    }
+
+    function parseJwt(token) {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+      } catch (error) {
+        console.error('JWT parse error:', error);
+        return null;
+      }
+    }
+
+    function loginAsGuest() {
+      const errorEl = document.getElementById('guestPasswordError');
+      const inputEl = document.getElementById('guestPasswordInput');
+      const entered = inputEl ? inputEl.value : '';
+
+      if (errorEl) errorEl.textContent = '';
+
+      fetch('nexus-config.json')
+        .then(r => {
+          if (!r.ok) throw new Error('Could not load config');
+          return r.json();
+        })
+        .then(cfg => {
+          const required = cfg.guestPassword || '';
+          if (required && entered !== required) {
+            if (errorEl) errorEl.textContent = 'Incorrect guest password.';
+            return;
+          }
+
+          const guestId = 'guest_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+          currentUser = {
+            id: guestId,
+            email: `${guestId}@nexus.local`,
+            name: 'Guest',
+            picture: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%23dadce0%22/%3E%3Ccircle cx=%2250%22 cy=%2240%22 r=%2220%22 fill=%22%235f6368%22/%3E%3Cellipse cx=%2250%22 cy=%2288%22 rx=%2235%22 ry=%2225%22 fill=%22%235f6368%22/%3E%3C/svg%3E'
+          };
+          localStorage.setItem('google_user', JSON.stringify(currentUser));
+          window.location.href = redirectUrl;
+        })
+        .catch(err => {
+          console.error('Guest password check failed:', err);
+          if (errorEl) errorEl.textContent = 'Unable to verify password. Please try again.';
+        });
+    }
+
+    function updateUserInfoDisplay() {
+      const accountDiv = document.getElementById('headerAccount');
+      const savedUser = localStorage.getItem('google_user');
+      if (savedUser) {
+        currentUser = JSON.parse(savedUser);
+      }
+      if (!accountDiv) return;
+
+      if (currentUser) {
+        accountDiv.innerHTML = `
+          <div class="user-info">
+            <img src="${currentUser.picture}" class="user-avatar" alt="Avatar">
+            <span class="user-name">${escapeHtml(currentUser.name)}</span>
+            <button id="signOutBtn" class="sign-out-btn">Sign Out</button>
+          </div>
+        `;
+        document.getElementById('signOutBtn').addEventListener('click', signOut);
+      } else {
+        accountDiv.innerHTML = `<a href="login.html" class="sign-in-btn">Sign In</a>`;
+      }
+    }
+
+    function signOut() {
+      currentUser = null;
+      localStorage.removeItem('google_user');
+      if (window.google && window.google.accounts) {
+        google.accounts.id.disableAutoSelect();
+      }
+      window.location.reload();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+      });
+    }
+
+    function initializeGoogleSignIn() {
+      if (!window.google) {
+        setTimeout(initializeGoogleSignIn, 100);
+        return;
+      }
+
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleSignIn,
+        auto_select: false,
+        cancel_on_tap_outside: false
+      });
+
+      google.accounts.id.renderButton(
+        document.getElementById('googleSignInBtn'),
+        { theme: 'outline', size: 'large', text: 'signin_with' }
+      );
+    }
+
+    document.getElementById('guestLoginBtn').addEventListener('click', loginAsGuest);
+    updateUserInfoDisplay();
+    initializeGoogleSignIn();
+
+    // ---- load Nexus logo + font from nexus-config.json ----
+    (function() {
+      const CONFIG_URL = 'nexus-config.json?v=' + Date.now();
+
+      fetch(CONFIG_URL)
+        .then(r => {
+          if (!r.ok) throw new Error('Could not load ' + CONFIG_URL);
+          return r.json();
+        })
+        .then(cfg => {
+          if (cfg.font) {
+            if (cfg.font.url) {
+              const link = document.createElement('link');
+              link.rel = 'stylesheet';
+              link.href = cfg.font.url;
+              document.head.appendChild(link);
+            }
+            if (cfg.font.family) {
+              document.documentElement.style.setProperty('--app-font', cfg.font.family);
+            }
+          }
+
+          if (cfg.logo && cfg.logo.image) {
+            const logoContainer = document.getElementById('headerLogo');
+            const loginLogo = document.getElementById('loginLogo');
+            if (logoContainer) {
+              logoContainer.innerHTML = '';
+              const img = document.createElement('img');
+              img.src = cfg.logo.image;
+              img.alt = cfg.logo.alt || 'Nexus';
+              img.style.maxHeight = '32px';
+              logoContainer.appendChild(img);
+            }
+            if (loginLogo) {
+              loginLogo.src = cfg.logo.image;
+              loginLogo.alt = cfg.logo.alt || 'Nexus';
+              loginLogo.style.display = '';
+            }
+          }
+        })
+        .catch(err => {
+          console.warn('Nexus config not applied:', err.message);
+        });
+    })();
+  </script>
+
+</body>
+</html>

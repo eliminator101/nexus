@@ -1,0 +1,15 @@
+{
+  "guestPassword": "admin",
+  "logo": {
+    "image": "assets/nexus-logo.png",
+    "alt": "Nexus"
+  },
+  "searchIcon": {
+    "image": "assets/search-icon.png",
+    "alt": "Search"
+  },
+  "font": {
+    "url": "https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap",
+    "family": "'Roboto', sans-serif"
+  }
+}

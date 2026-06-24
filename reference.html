@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Upload to Google Drive & Share</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      padding: 40px;
+      width: 100%;
+      max-width: 500px;
+    }
+
+    h1 {
+      font-size: 24px;
+      color: #202124;
+      margin-bottom: 8px;
+    }
+
+    p.subtitle {
+      color: #5f6368;
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+
+    .step {
+      margin-bottom: 24px;
+    }
+
+    .step-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #1a73e8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    button {
+      background: #1a73e8;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      width: 100%;
+    }
+
+    button:hover {
+      background: #1557b0;
+    }
+
+    button:active {
+      transform: scale(0.99);
+    }
+
+    button:disabled {
+      background: #dadce0;
+      color: #5f6368;
+      cursor: not-allowed;
+    }
+
+    .file-input-wrapper {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+      width: 100%;
+    }
+
+    .file-input-wrapper input[type="file"] {
+      position: absolute;
+      left: -9999px;
+    }
+
+    .file-label {
+      display: block;
+      padding: 12px 20px;
+      border: 2px dashed #dadce0;
+      border-radius: 8px;
+      text-align: center;
+      color: #5f6368;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .file-label:hover {
+      border-color: #1a73e8;
+      color: #1a73e8;
+    }
+
+    .file-name {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #202124;
+      word-break: break-all;
+    }
+
+    .status {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-top: 16px;
+      display: none;
+    }
+
+    .status.info {
+      background: #e8f0fe;
+      color: #1a73e8;
+      display: block;
+    }
+
+    .status.success {
+      background: #e6f4ea;
+      color: #137333;
+      display: block;
+    }
+
+    .status.error {
+      background: #fce8e8;
+      color: #c5221f;
+      display: block;
+    }
+
+    .result {
+      margin-top: 24px;
+      padding: 16px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .result.show {
+      display: block;
+    }
+
+    .result-label {
+      font-size: 12px;
+      color: #5f6368;
+      margin-bottom: 6px;
+    }
+
+    .link-box {
+      display: flex;
+      gap: 8px;
+    }
+
+    .link-box input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #dadce0;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #202124;
+    }
+
+    .link-box button {
+      width: auto;
+      padding: 10px 16px;
+      background: #34a853;
+    }
+
+    .link-box button:hover {
+      background: #2e7a42;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Upload & Share</h1>
+    <p class="subtitle">Upload a file to your Google Drive and get a public shareable link.</p>
+
+    <!-- STEP 1: Sign in -->
+    <div class="step">
+      <div class="step-label">Step 1</div>
+      <button id="signInBtn" onclick="requestAccessToken()">Sign in with Google</button>
+    </div>
+
+    <!-- STEP 2: Select file -->
+    <div class="step">
+      <div class="step-label">Step 2</div>
+      <div class="file-input-wrapper">
+        <label for="fileInput" class="file-label">Click to choose a file</label>
+        <input type="file" id="fileInput" onchange="onFileSelected(event)" />
+      </div>
+      <div class="file-name" id="fileName"></div>
+    </div>
+
+    <!-- STEP 3: Upload -->
+    <div class="step">
+      <div class="step-label">Step 3</div>
+      <button id="uploadBtn" onclick="uploadAndShare()" disabled>Upload & Make Public</button>
+    </div>
+
+    <!-- Status messages -->
+    <div id="status" class="status"></div>
+
+    <!-- Result link -->
+    <div id="result" class="result">
+      <div class="result-label">Public Google Drive Link</div>
+      <div class="link-box">
+        <input type="text" id="shareLink" readonly />
+        <button onclick="copyLink()">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Google Identity Services library -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <script>
+    // ============================================================
+    // FILL IN YOUR GOOGLE CLOUD CREDENTIALS HERE
+    // ============================================================
+    // 1. Go to https://console.cloud.google.com/
+    // 2. Create a project (or pick an existing one)
+    // 3. Enable the Google Drive API
+    // 4. Go to APIs & Services > Credentials
+    // 5. Create OAuth 2.0 Client ID (Web application)
+    // 6. Add your origin, e.g. http://localhost:8080
+    // 7. Paste the Client ID below
+    // ============================================================
+    const CLIENT_ID = '681583969653-a5jt1ai9ddnflmoun8edtul69gg9qbsl.apps.googleusercontent.com';
+    // ============================================================
+
+    const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+    let accessToken = null;
+    let selectedFile = null;
+    let tokenClient = null;
+
+    // Initialize Google Identity Services once the library loads
+    window.onload = function () {
+      if (typeof google === 'undefined') {
+        showStatus('Google Identity Services library failed to load. Check your internet connection.', 'error');
+        return;
+      }
+
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (tokenResponse) => {
+          if (tokenResponse && tokenResponse.access_token) {
+            accessToken = tokenResponse.access_token;
+            showStatus('Signed in successfully!', 'success');
+            document.getElementById('signInBtn').textContent = 'Signed In';
+            document.getElementById('signInBtn').disabled = true;
+            updateUploadButton();
+          } else {
+            showStatus('Sign-in failed. Please try again.', 'error');
+          }
+        },
+        error_callback: (err) => {
+          console.error(err);
+          showStatus('Sign-in error: ' + (err?.message || 'Unknown error'), 'error');
+        },
+      });
+    };
+
+    function requestAccessToken() {
+      if (CLIENT_ID.includes('YOUR_CLIENT_ID')) {
+        showStatus('Please replace YOUR_CLIENT_ID in the script with your real Client ID.', 'error');
+        return;
+      }
+
+      if (!tokenClient) {
+        showStatus('Google Identity Services is still loading. Wait a moment and try again.', 'info');
+        return;
+      }
+
+      // Prompt the user to pick a Google account and consent
+      tokenClient.requestAccessToken({ prompt: 'consent' });
+    }
+
+    function onFileSelected(event) {
+      selectedFile = event.target.files[0] || null;
+
+      if (selectedFile) {
+        document.getElementById('fileName').textContent = selectedFile.name;
+      } else {
+        document.getElementById('fileName').textContent = '';
+      }
+
+      updateUploadButton();
+    }
+
+    function updateUploadButton() {
+      const canUpload = accessToken && selectedFile;
+      document.getElementById('uploadBtn').disabled = !canUpload;
+    }
+
+    async function uploadAndShare() {
+      if (!accessToken || !selectedFile) return;
+
+      setUploading(true);
+      showStatus('Uploading file to Google Drive...', 'info');
+      document.getElementById('result').classList.remove('show');
+
+      try {
+        // 1. Upload file via multipart upload
+        const fileId = await uploadFileToDrive(selectedFile, accessToken);
+
+        // 2. Make the file public (anyone with the link can view)
+        await makeFilePublic(fileId, accessToken);
+
+        // 3. Build and display the public link
+        const publicLink = `https://drive.google.com/file/d/${fileId}/view`;
+        document.getElementById('shareLink').value = publicLink;
+        document.getElementById('result').classList.add('show');
+
+        showStatus('File uploaded and shared publicly!', 'success');
+      } catch (err) {
+        console.error(err);
+        showStatus('Error: ' + err.message, 'error');
+      } finally {
+        setUploading(false);
+      }
+    }
+
+    async function uploadFileToDrive(file, token) {
+      const metadata = {
+        name: file.name,
+        mimeType: file.type || 'application/octet-stream',
+      };
+
+      const formData = new FormData();
+      formData.append(
+        'metadata',
+        new Blob([JSON.stringify(metadata)], { type: 'application/json' })
+      );
+      formData.append('file', file);
+
+      const response = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.error?.message || `Upload failed (${response.status})`);
+      }
+
+      const data = await response.json();
+      return data.id;
+    }
+
+    async function makeFilePublic(fileId, token) {
+      const response = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            role: 'reader',
+            type: 'anyone',
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.error?.message || `Permission change failed (${response.status})`);
+      }
+    }
+
+    function setUploading(isUploading) {
+      const btn = document.getElementById('uploadBtn');
+      if (isUploading) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span>Uploading...';
+      } else {
+        btn.disabled = !(accessToken && selectedFile);
+        btn.textContent = 'Upload & Make Public';
+      }
+    }
+
+    function showStatus(message, type) {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = message;
+      statusEl.className = 'status ' + type;
+    }
+
+    function copyLink() {
+      const input = document.getElementById('shareLink');
+      input.select();
+      input.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(input.value).then(() => {
+        showStatus('Link copied to clipboard!', 'success');
+      });
+    }
+  </script>
+</body>
+</html>
